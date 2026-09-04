@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aplikasi E-Jurnal & Absensi Guru</title>
+    <!-- Memuat pustaka html-docx untuk export ke Word (.docx) -->
+    <script src="https://cdn.jsdelivr.net/npm/html-docx-js@0.3.1/dist/html-docx.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f7f6; margin: 0; padding: 10px; }
+        .container { max-width: 800px; background: white; margin: auto; padding: 20px; box-shadow: 0px 0px 10px rgba(0,0,0,0.1); border-radius: 8px; margin-top: 20px; }
+        h2, h3 { text-align: center; color: #333; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-weight: bold; margin-bottom: 5px; color: #555; }
+        input, textarea, select { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; font-size: 16px; }
+        button { background-color: #007bff; color: white; padding: 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; width: 100%; }
+        button:hover { background-color: #0056b3; }
+        .tab-menu { display: flex; justify-content: center; margin-bottom: 20px; border-bottom: 2px solid #ddd; }
+        .tab-btn { background: none; border: none; padding: 10px 20px; font-size: 16px; font-weight: bold; cursor: pointer; color: #666; width: auto; }
+        .tab-btn.active { color: #007bff; border-bottom: 3px solid #007bff; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .table-responsive { width: 100%; overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; min-width: 500px; }
+        table, th, td { border: 1px solid #ddd; }
+        th, td { padding: 10px; text-align: left; font-size: 14px; }
+        th { background-color: #f2f2f2; }
+        
+        .btn-group { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+        .word-btn { background-color: #2b579a; flex: 1; }
+        .word-btn:hover { background-color: #1f3f70; }
+        .pdf-btn { background-color: #d9534f; flex: 1; }
+        .pdf-btn:hover { background-color: #c9302c; }
+        
+        .logout-btn { background-color: #6c757d; margin-top: 15px; }
+        .logout-btn:hover { background-color: #5a6268; }
+        .hidden { display: none; }
+        .error-msg { color: red; text-align: center; margin-bottom: 10px; font-size: 14px; }
+        .loading { text-align: center; color: #007bff; font-weight: bold; margin-top: 10px; display: none; }
+
+        @media (min-width: 768px) {
+            body { padding: 20px; }
+            .container { padding: 25px; }
+            button { width: auto; }
+        }
+
+        /* Pengaturan Cetak PDF via Browser Print yang Aman Tanpa Halaman Kosong */
+        @media print {
+            body * { visibility: hidden !important; }
+            .print-container, .print-container * { visibility: visible !important; }
+            .print-container { 
+                position: absolute; 
+                left: 0; 
+                top: 0; 
+                width: 100%; 
+                background: white; 
+                padding: 10px; 
+                margin: 0;
+            }
+            .no-print { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container" id="loginPage">
+    <h2>Login E-Jurnal & Absensi</h2>
+    <p style="text-align: center; color: #666; font-size: 14px;">Masukkan NIP dan Password Anda</p>
+    <div id="errorAlert" class="error-msg"></div>
+    <form id="loginForm">
+        <div class="form-group">
+            <label for="loginNip">NIP (Username):</label>
+            <input type="text" id="loginNip" placeholder="Masukkan NIP Anda" required>
+        </div>
+        <div class="form-group">
+            <label for="loginPassword">Password:</label>
+            <input type="password" id="loginPassword" placeholder="Masukkan password" required>
+        </div>
+        <button type="submit" id="btnLogin">Masuk Aplikasi</button>
+        <div id="loadingLogin" class="loading">Menghubungkan ke server...</div>
+    </form>
+</div>
+
+<div class="container hidden" id="appPage">
+    <h2>Panel Laporan & Absensi Guru</h2>
+
+    <div class="tab-menu no-print">
+        <button class="tab-btn active" onclick="switchTab('jurnalTab', this)">Jurnal Harian</button>
+        <button class="tab-btn" onclick="switchTab('absensiTab', this)">Absensi Siswa</button>
+    </div>
+
+    <!-- KONTEN JURNAL HARIAN -->
+    <div id="jurnalTab" class="tab-content active">
+        <div id="exportJurnalContent" class="printable-area">
+            <h3>Laporan Kerja</h3>
+            <div style="margin-bottom: 15px; font-size: 14px;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr><td style="border: 1px solid #ddd; padding: 8px; width: 30%;"><strong>Nama</strong></td><td style="border: 1px solid #ddd; padding: 8px;"><span id="valNama"></span></td></tr>
+                    <tr><td style="border: 1px solid #ddd; padding: 8px;"><strong>NIP</strong></td><td style="border: 1px solid #ddd; padding: 8px;"><span id="valNip"></span></td></tr>
+                    <tr><td style="border: 1px solid #ddd; padding: 8px;"><strong>Level Jabatan</strong></td><td style="border: 1px solid #ddd; padding: 8px;"><span id="valJabatan"></span></td></tr>
+                    <tr><td style="border: 1px solid #ddd; padding: 8px;"><strong>Pangkat</strong></td><td style="border: 1px solid #ddd; padding: 8px;"><span id="valPangkat">Penata Muda Tk. I</span></td></tr>
+                    <tr><td style="border: 1px solid #ddd; padding: 8px;"><strong>Golongan Ruang</strong></td><td style="border: 1px solid #ddd; padding: 8px;"><span id="valGolongan">III/b</span></td></tr>
+                </table>
+            </div>
+
+            <p style="margin-bottom: 15px; font-size: 14px;"><strong>Tanggal dicetak :</strong> <span id="labelTglCetak"></span></p>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 20px;">
+                <h3 style="margin: 0; text-align: left;">Daftar Kegiatan Jurnal Bulanan</h3>
+                <div style="display: flex; align-items: center; gap: 8px;" class="no-print">
+                    <label for="filterBulan" style="margin: 0; font-size: 14px;">Filter Bulan:</label>
+                    <select id="filterBulan" onchange="renderJurnal()" style="padding: 6px; width: auto; font-size: 14px;">
+                        <option value="semua">Semua Bulan</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 10%;">No.</th>
+                            <th style="width: 25%;">Kegiatan</th>
+                            <th style="width: 45%;">Pekerjaan</th>
+                            <th style="width: 20%;">Tanggal</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabelJurnal">
+                        <tr><td colspan="4" style="text-align: center; color: #888;">Memuat data...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="signature-section" style="margin-top: 40px; font-size: 14px;">
+                <table style="border: none; width: 100%; text-align: center;">
+                    <tr><td style="border: none; width: 50%;"></td><td style="border: none; width: 50%;">Bulukumba, <span id="autoTanggalTtd"></span></td></tr>
+                    <tr><td style="border: none; padding-bottom: 60px;"><strong>Kepala Madrasah</strong></td><td style="border: none; padding-bottom: 60px;"><strong>Guru Kelas</strong></td></tr>
+                    <tr>
+                        <td style="border: none;"><strong><u>Dra. Hj. A. Sumarni, S.Pd, MM</u></strong><br>NIP. 196702142020022002</td>
+                        <td style="border: none;"><strong><u><span id="ttdNama"></span></u></strong><br>NIP. <span id="ttdNip"></span></td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- Form Input Jurnal (Tidak ikut tercetak) -->
+        <div class="no-print" style="margin-top: 30px; background: #fdfdfd; padding: 15px; border: 1px solid #eee; border-radius: 5px;">
+            <h4>Tambah Jurnal Harian Baru</h4>
+            <form id="jurnalForm">
+                <div class="form-group"><label for="tanggal">Tanggal:</label><input type="date" id="tanggal" required></div>
+                <div class="form-group"><label for="kegiatan">Kegiatan:</label><input type="text" id="kegiatan" placeholder="Contoh: Upacara bendera" required></div>
+                <div class="form-group"><label for="pekerjaan">Uraian Pekerjaan:</label><textarea id="pekerjaan" rows="3" placeholder="Contoh: Mengikuti upacara..." required></textarea></div>
+                <button type="submit" id="btnSimpanJurnal">Simpan ke Jurnal Bulanan</button>
+                <div id="loadingJurnal" class="loading">Menyimpan ke Google Sheets...</div>
+            </form>
+        </div>
+
+        <div class="btn-group no-print">
+            <button class="word-btn" onclick="exportJurnalToWord()">Unduh Jurnal (Word .docx)</button>
+            <button class="pdf-btn" onclick="exportJurnalToPdf()">Unduh Jurnal (PDF)</button>
+        </div>
+    </div>
+
+    <!-- KONTEN ABSENSI SISWA -->
+    <div id="absensiTab" class="tab-content">
+        <div id="exportAbsensiContent" class="printable-area-absensi">
+            <h3>Rekapitulasi Absensi Siswa</h3>
+            <div style="margin-bottom: 15px; font-size: 14px;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr><td style="border: 1px solid #ddd; padding: 8px; width: 30%;"><strong>Nama Guru</strong></td><td style="border: 1px solid #ddd; padding: 8px;"><span id="valNamaAbsen"></span></td></tr>
+                    <tr><td style="border: 1px solid #ddd; padding: 8px;"><strong>NIP</strong></td><td style="border: 1px solid #ddd; padding: 8px;"><span id="valNipAbsen"></span></td></tr>
+                </table>
+            </div>
+
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 10%;">No.</th>
+                            <th style="width: 45%;">Nama Siswa</th>
+                            <th style="width: 25%;">Keterangan</th>
+                            <th style="width: 20%;">Tanggal</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabelAbsensi">
+                        <tr><td colspan="4" style="text-align: center; color: #888;">Memuat data...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Form Input Absensi (Tidak ikut tercetak) -->
+        <div class="no-print" style="margin-top: 30px; background: #fdfdfd; padding: 15px; border: 1px solid #eee; border-radius: 5px;">
+            <h4>Tambah Absensi Siswa</h4>
+            <form id="absensiForm">
+                <div class="form-group"><label for="tglAbsen">Tanggal Absensi:</label><input type="date" id="tglAbsen" required></div>
+                <div class="form-group"><label for="namaSiswa">Nama Siswa:</label><input type="text" id="namaSiswa" placeholder="Nama lengkap siswa" required></div>
+                <div class="form-group"><label for="keteranganAbsen">Keterangan:</label>
+                    <select id="keteranganAbsen" required>
+                        <option value="Hadir">Hadir</option><option value="Sakit">Sakit</option><option value="Izin">Izin</option><option value="Alfa">Alfa</option>
+                    </select>
+                </div>
+                <button type="submit" id="btnSimpanAbsen">Simpan Absensi</button>
+                <div id="loadingAbsen" class="loading">Menyimpan absensi...</div>
+            </form>
+        </div>
+
+        <div class="btn-group no-print">
+            <button class="word-btn" onclick="exportAbsensiToWord()">Unduh Absensi (Word .docx)</button>
+            <button class="pdf-btn" onclick="exportAbsensiToPdf()">Unduh Absensi (PDF)</button>
+        </div>
+    </div>
+
+    <div style="margin-top: 30px; text-align: center;" class="no-print">
+        <button class="logout-btn" onclick="logout()">Keluar Akun (Logout)</button>
+    </div>
+</div>
+
+<script>
+    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxQxL8lx2ZkAVR2TyLb7H3OSscQUSgRHIYxgxm8-WeSi5YNAoIiruNT9zG5sjEMTjSN/exec";
+
+    let currentUser = {};
+    let listKegiatan = [];
+    let listAbsensi = [];
+
+    const namaBulanList = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+    const hariList = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+
+    // Membersihkan format tanggal ISO dari Google Sheets (menjadi YYYY-MM-DD)
+    function formatTanggalClean(tglStr) {
+        if (!tglStr) return '-';
+        if (tglStr.includes('T')) {
+            return tglStr.split('T')[0];
+        }
+        return tglStr.substring(0, 10);
+    }
+
+    function updateTanggalTandatangan(tanggalInput) {
+        let dateObj = tanggalInput ? new Date(tanggalInput) : new Date();
+        const tahun = dateObj.getFullYear();
+        const bulanIndex = dateObj.getMonth();
+        const hariNama = hariList[dateObj.getDay()];
+
+        // Tanggal cetak & TTD selalu akhir bulan berjalan
+        const lastDayObj = new Date(tahun, bulanIndex + 1, 0);
+        const lastDayNum = lastDayObj.getDate();
+
+        document.getElementById('autoTanggalTtd').innerText = `${lastDayNum} ${namaBulanList[bulanIndex]} ${tahun}`;
+        document.getElementById('labelTglCetak').innerText = `${hariNama}, ${lastDayNum} ${namaBulanList[bulanIndex]} ${tahun}`;
+    }
+
+    function switchTab(tabId, btnElement) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+        document.getElementById(tabId).classList.add('active');
+        btnElement.classList.add('active');
+    }
+
+    document.getElementById('loginForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const nip = document.getElementById('loginNip').value.trim();
+        const password = document.getElementById('loginPassword').value.trim();
+        
+        const loadingLogin = document.getElementById('loadingLogin');
+        const errorAlert = document.getElementById('errorAlert');
+
+        loadingLogin.style.display = "block";
+        errorAlert.innerText = "";
+
+        fetch(`${WEB_APP_URL}?action=login&nip=${nip}&password=${password}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === "success") {
+                    currentUser = { nip: nip, nama: data.nama, jabatan: data.jabatan };
+                    
+                    document.getElementById('valNama').innerText = data.nama;
+                    document.getElementById('valNip').innerText = nip;
+                    document.getElementById('valJabatan').innerText = data.jabatan;
+                    
+                    document.getElementById('valNamaAbsen').innerText = data.nama;
+                    document.getElementById('valNipAbsen').innerText = nip;
+
+                    document.getElementById('ttdNama').innerText = data.nama;
+                    document.getElementById('ttdNip').innerText = nip;
+
+                    updateTanggalTandatangan();
+
+                    fetch(`${WEB_APP_URL}?action=getData&nip=${nip}`)
+                        .then(res => res.json())
+                        .then(sheetData => {
+                            loadingLogin.style.display = "none";
+                            if (sheetData.status === "success") {
+                                listKegiatan = sheetData.jurnal || [];
+                                listAbsensi = sheetData.absensi || [];
+                                populateFilterBulan();
+                                renderJurnal();
+                                renderAbsensi();
+                            }
+                            document.getElementById('loginPage').classList.add('hidden');
+                            document.getElementById('appPage').classList.remove('hidden');
+                            document.getElementById('loginForm').reset();
+                        });
+                } else {
+                    loadingLogin.style.display = "none";
+                    errorAlert.innerText = data.message;
+                }
+            })
+            .catch(err => {
+                loadingLogin.style.display = "none";
+                errorAlert.innerText = "Koneksi ke server gagal.";
+            });
+    });
+
+    function populateFilterBulan() {
+        const selectBulan = document.getElementById('filterBulan');
+        const currentVal = selectBulan.value;
+        selectBulan.innerHTML = '<option value="semua">Semua Bulan</option>';
+
+        let uniqueBulan = [...new Set(listKegiatan.map(item => item.bulanTahun))];
+        uniqueBulan.sort().reverse();
+
+        uniqueBulan.forEach(b => {
+            if (b) {
+                let opt = document.createElement('option');
+                opt.value = b;
+                opt.innerText = b;
+                selectBulan.appendChild(opt);
+            }
+        });
+        if (uniqueBulan.includes(currentVal)) {
+            selectBulan.value = currentVal;
+        }
+    }
+
+    document.getElementById('jurnalForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const tanggal = document.getElementById('tanggal').value;
+        const kegiatan = document.getElementById('kegiatan').value;
+        const pekerjaan = document.getElementById('pekerjaan').value;
+
+        updateTanggalTandatangan(tanggal);
+        const loading = document.getElementById('loadingJurnal');
+        loading.style.display = "block";
+
+        const payload = {
+            action: "simpanJurnal",
+            nip: currentUser.nip,
+            nama: currentUser.nama,
+            tanggal: tanggal,
+            kegiatan: kegiatan,
+            pekerjaan: pekerjaan
+        };
+
+        fetch(WEB_APP_URL, {
+            method: "POST",
+            body: JSON.stringify(payload)
+        })
+        .then(res => res.json())
+        .then(data => {
+            loading.style.display = "none";
+            if (data.status === "success") {
+                let tglArr = tanggal.split("-");
+                let bulanTahunStr = namaBulanList[parseInt(tglArr[1]) - 1] + " " + tglArr[0];
+
+                listKegiatan.push({ kegiatan, pekerjaan, tanggal, bulanTahun: bulanTahunStr });
+                populateFilterBulan();
+                renderJurnal();
+                alert("Jurnal berhasil disimpan ke database!");
+                document.getElementById('kegiatan').value = "";
+                document.getElementById('pekerjaan').value = "";
+            } else {
+                alert("Gagal menyimpan jurnal.");
+            }
+        })
+        .catch(err => {
+            loading.style.display = "none";
+            alert("Kesalahan jaringan.");
+        });
+    });
+
+    function renderJurnal() {
+        const tbody = document.getElementById('tabelJurnal');
+        const filterVal = document.getElementById('filterBulan').value;
+        tbody.innerHTML = "";
+
+        let filteredData = listKegiatan;
+        if (filterVal !== "semua") {
+            filteredData = listKegiatan.filter(item => item.bulanTahun === filterVal);
+        }
+
+        if (filteredData.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #888;">Belum ada data jurnal untuk periode ini.</td></tr>`;
+            return;
+        }
+
+        filteredData.forEach((item, idx) => {
+            let bersihTanggal = formatTanggalClean(item.tanggal);
+            tbody.innerHTML += `<tr><td>${idx + 1}</td><td>${item.kegiatan}</td><td>${item.pekerjaan}</td><td>${bersihTanggal}</td></tr>`;
+        });
+    }
+
+    document.getElementById('absensiForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const tanggal = document.getElementById('tglAbsen').value;
+        const namaSiswa = document.getElementById('namaSiswa').value;
+        const keterangan = document.getElementById('keteranganAbsen').value;
+
+        const loading = document.getElementById('loadingAbsen');
+        loading.style.display = "block";
+
+        const payload = {
+            action: "simpanAbsensi",
+            nip: currentUser.nip,
+            nama: currentUser.nama,
+            tanggal: tanggal,
+            namaSiswa: namaSiswa,
+            keterangan: keterangan
+        };
+
+        fetch(WEB_APP_URL, {
+            method: "POST",
+            body: JSON.stringify(payload)
+        })
+        .then(res => res.json())
+        .then(data => {
+            loading.style.display = "none";
+            if (data.status === "success") {
+                listAbsensi.push({ namaSiswa, keterangan, tanggal });
+                renderAbsensi();
+                alert("Absensi berhasil disimpan ke database!");
+                document.getElementById('namaSiswa').value = "";
+            } else {
+                alert("Gagal menyimpan absensi.");
+            }
+        })
+        .catch(err => {
+            loading.style.display = "none";
+            alert("Kesalahan jaringan.");
+        });
+    });
+
+    function renderAbsensi() {
+        const tbody = document.getElementById('tabelAbsensi');
+        tbody.innerHTML = "";
+        if (listAbsensi.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #888;">Belum ada data absensi.</td></tr>`;
+            return;
+        }
+        listAbsensi.forEach((item, idx) => {
+            let bersihTanggal = formatTanggalClean(item.tanggal);
+            tbody.innerHTML += `<tr><td>${idx + 1}</td><td>${item.namaSiswa}</td><td><b>${item.keterangan}</b></td><td>${bersihTanggal}</td></tr>`;
+        });
+    }
+
+    // Fungsi unduh Jurnal ke format Word (.docx)
+    function exportJurnalToWord() {
+        let contentHTML = document.getElementById('exportJurnalContent').innerHTML;
+        let htmlString = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Laporan Jurnal Kerja</title></head><body>${contentHTML}</body></html>`;
+        
+        let converted = htmlDocx.asBlob(htmlString);
+        let link = document.createElement('a');
+        link.href = URL.createObjectURL(converted);
+        link.download = `Laporan_Jurnal_${currentUser.nama || 'Guru'}.docx`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    // Fungsi unduh Absensi ke format Word (.docx)
+    function exportAbsensiToWord() {
+        let contentHTML = document.getElementById('exportAbsensiContent').innerHTML;
+        let htmlString = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Rekap Absensi Siswa</title></head><body>${contentHTML}</body></html>`;
+        
+        let converted = htmlDocx.asBlob(htmlString);
+        let link = document.createElement('a');
+        link.href = URL.createObjectURL(converted);
+        link.download = `Rekap_Absensi_${currentUser.nama || 'Guru'}.docx`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    // Fungsi unduh Jurnal ke PDF Aman (Tanpa Halaman Kosong & Tanpa Reload Logout)
+    function exportJurnalToPdf() {
+        const content = document.getElementById('exportJurnalContent');
+        const printContainer = document.createElement('div');
+        printContainer.className = 'print-container';
+        printContainer.appendChild(content.cloneNode(true));
+        document.body.appendChild(printContainer);
+        
+        window.print();
+        
+        document.body.removeChild(printContainer);
+    }
+
+    // Fungsi unduh Absensi ke PDF Aman (Tanpa Halaman Kosong & Tanpa Reload Logout)
+    function exportAbsensiToPdf() {
+        const content = document.getElementById('exportAbsensiContent');
+        const printContainer = document.createElement('div');
+        printContainer.className = 'print-container';
+        printContainer.appendChild(content.cloneNode(true));
+        document.body.appendChild(printContainer);
+        
+        window.print();
+        
+        document.body.removeChild(printContainer);
+    }
+
+    function logout() {
+        currentUser = {};
+        listKegiatan = [];
+        listAbsensi = [];
+        document.getElementById('appPage').classList.add('hidden');
+        document.getElementById('loginPage').classList.remove('hidden');
+    }
+</script>
+
+</body>
+</html>
