@@ -26,6 +26,12 @@
         th, td { padding: 10px; text-align: left; font-size: 14px; }
         th { background-color: #f2f2f2; }
         
+        /* Tombol Pilihan Kelas 1 - 6 */
+        .kelas-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 15px; }
+        .kelas-btn { background-color: #e9ecef; color: #333; border: 1px solid #ced4da; padding: 10px; font-weight: bold; border-radius: 5px; cursor: pointer; transition: 0.2s; }
+        .kelas-btn:hover { background-color: #dee2e6; }
+        .kelas-btn.selected { background-color: #007bff; color: white; border-color: #007bff; }
+
         .btn-group { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
         .word-btn { background-color: #2b579a; flex: 1; }
         .word-btn:hover { background-color: #1f3f70; }
@@ -42,21 +48,13 @@
             body { padding: 20px; }
             .container { padding: 25px; }
             button { width: auto; }
+            .kelas-grid { grid-template-columns: repeat(6, 1fr); }
         }
 
-        /* Pengaturan Cetak PDF via Browser Print yang Aman Tanpa Halaman Kosong */
         @media print {
             body * { visibility: hidden !important; }
             .print-container, .print-container * { visibility: visible !important; }
-            .print-container { 
-                position: absolute; 
-                left: 0; 
-                top: 0; 
-                width: 100%; 
-                background: white; 
-                padding: 10px; 
-                margin: 0;
-            }
+            .print-container { position: absolute; left: 0; top: 0; width: 100%; background: white; padding: 10px; margin: 0; }
             .no-print { display: none !important; }
         }
     </style>
@@ -89,7 +87,7 @@
         <button class="tab-btn" onclick="switchTab('absensiTab', this)">Absensi Siswa</button>
     </div>
 
-    <!-- KONTEN JURNAL HARIAN -->
+    <!-- ================= TAB 1: JURNAL HARIAN ================= -->
     <div id="jurnalTab" class="tab-content active">
         <div id="exportJurnalContent" class="printable-area">
             <h3>Laporan Kerja</h3>
@@ -143,7 +141,6 @@
             </div>
         </div>
 
-        <!-- Form Input Jurnal (Tidak ikut tercetak) -->
         <div class="no-print" style="margin-top: 30px; background: #fdfdfd; padding: 15px; border: 1px solid #eee; border-radius: 5px;">
             <h4>Tambah Jurnal Harian Baru</h4>
             <form id="jurnalForm">
@@ -161,8 +158,52 @@
         </div>
     </div>
 
-    <!-- KONTEN ABSENSI SISWA -->
+    <!-- ================= TAB 2: ABSENSI SISWA PER KELAS ================= -->
     <div id="absensiTab" class="tab-content">
+        <!-- Input Absensi Massal Berdasarkan Pilihan Kelas -->
+        <div class="no-print" style="background: #fdfdfd; padding: 15px; border: 1px solid #eee; border-radius: 5px; margin-bottom: 25px;">
+            <h4>Input Absensi Siswa Harian</h4>
+            
+            <div class="form-group">
+                <label>1. Pilih Kelas:</label>
+                <div class="kelas-grid">
+                    <button type="button" class="kelas-btn" onclick="pilihKelas('1', this)">Kelas 1</button>
+                    <button type="button" class="kelas-btn" onclick="pilihKelas('2', this)">Kelas 2</button>
+                    <button type="button" class="kelas-btn" onclick="pilihKelas('3', this)">Kelas 3</button>
+                    <button type="button" class="kelas-btn" onclick="pilihKelas('4', this)">Kelas 4</button>
+                    <button type="button" class="kelas-btn" onclick="pilihKelas('5', this)">Kelas 5</button>
+                    <button type="button" class="kelas-btn" onclick="pilihKelas('6', this)">Kelas 6</button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="tglAbsen">2. Tanggal Absensi:</label>
+                <input type="date" id="tglAbsen" required>
+            </div>
+
+            <div id="loadingSiswa" class="loading">Mengambil daftar siswa dari Google Sheets...</div>
+
+            <!-- Daftar Checklist Siswa Muncul Otomatis Disini -->
+            <div id="containerDaftarSiswa" class="hidden">
+                <label style="margin-top: 15px;">3. Daftar Siswa Kelas <span id="judulKelasTerpilih"></span>:</label>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 10%;">No.</th>
+                                <th style="width: 55%;">Nama Lengkap Siswa</th>
+                                <th style="width: 35%;">Status Kehadiran</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyInputAbsen"></tbody>
+                    </table>
+                </div>
+                <button type="button" id="btnSimpanAbsenMassal" onclick="simpanAbsensiMassal()" style="margin-top: 15px; background-color: #28a745;">Simpan Absensi Kelas Ini</button>
+                <div id="loadingAbsen" class="loading">Menyimpan semua absensi kelas ke database...</div>
+            </div>
+        </div>
+
+        <!-- Area Rekapitulasi untuk Cetak/Unduh -->
         <div id="exportAbsensiContent" class="printable-area-absensi">
             <h3>Rekapitulasi Absensi Siswa</h3>
             <div style="margin-bottom: 15px; font-size: 14px;">
@@ -172,37 +213,35 @@
                 </table>
             </div>
 
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;" class="no-print">
+                <label for="filterKelasRekap" style="margin: 0; font-size: 14px;">Filter Rekap Kelas:</label>
+                <select id="filterKelasRekap" onchange="renderAbsensi()" style="padding: 6px; width: auto; font-size: 14px;">
+                    <option value="semua">Semua Kelas</option>
+                    <option value="1">Kelas 1</option>
+                    <option value="2">Kelas 2</option>
+                    <option value="3">Kelas 3</option>
+                    <option value="4">Kelas 4</option>
+                    <option value="5">Kelas 5</option>
+                    <option value="6">Kelas 6</option>
+                </select>
+            </div>
+
             <div class="table-responsive">
                 <table>
                     <thead>
                         <tr>
                             <th style="width: 10%;">No.</th>
-                            <th style="width: 45%;">Nama Siswa</th>
-                            <th style="width: 25%;">Keterangan</th>
+                            <th style="width: 15%;">Kelas</th>
+                            <th style="width: 40%;">Nama Siswa</th>
+                            <th style="width: 15%;">Status</th>
                             <th style="width: 20%;">Tanggal</th>
                         </tr>
                     </thead>
                     <tbody id="tabelAbsensi">
-                        <tr><td colspan="4" style="text-align: center; color: #888;">Memuat data...</td></tr>
+                        <tr><td colspan="5" style="text-align: center; color: #888;">Memuat data...</td></tr>
                     </tbody>
                 </table>
             </div>
-        </div>
-
-        <!-- Form Input Absensi (Tidak ikut tercetak) -->
-        <div class="no-print" style="margin-top: 30px; background: #fdfdfd; padding: 15px; border: 1px solid #eee; border-radius: 5px;">
-            <h4>Tambah Absensi Siswa</h4>
-            <form id="absensiForm">
-                <div class="form-group"><label for="tglAbsen">Tanggal Absensi:</label><input type="date" id="tglAbsen" required></div>
-                <div class="form-group"><label for="namaSiswa">Nama Siswa:</label><input type="text" id="namaSiswa" placeholder="Nama lengkap siswa" required></div>
-                <div class="form-group"><label for="keteranganAbsen">Keterangan:</label>
-                    <select id="keteranganAbsen" required>
-                        <option value="Hadir">Hadir</option><option value="Sakit">Sakit</option><option value="Izin">Izin</option><option value="Alfa">Alfa</option>
-                    </select>
-                </div>
-                <button type="submit" id="btnSimpanAbsen">Simpan Absensi</button>
-                <div id="loadingAbsen" class="loading">Menyimpan absensi...</div>
-            </form>
         </div>
 
         <div class="btn-group no-print">
@@ -217,21 +256,20 @@
 </div>
 
 <script>
-    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxQxL8lx2ZkAVR2TyLb7H3OSscQUSgRHIYxgxm8-WeSi5YNAoIiruNT9zG5sjEMTjSN/exec";
+    const WEB_APP_URL = "URL_WEB_APP_GOOGLE_APPS_SCRIPT_ANDA_DISINI";
 
     let currentUser = {};
     let listKegiatan = [];
     let listAbsensi = [];
+    let selectedKelas = "";
+    let siswaKelasTerpilih = [];
 
     const namaBulanList = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
     const hariList = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 
-    // Membersihkan format tanggal ISO dari Google Sheets (menjadi YYYY-MM-DD)
     function formatTanggalClean(tglStr) {
         if (!tglStr) return '-';
-        if (tglStr.includes('T')) {
-            return tglStr.split('T')[0];
-        }
+        if (tglStr.includes('T')) return tglStr.split('T')[0];
         return tglStr.substring(0, 10);
     }
 
@@ -241,7 +279,6 @@
         const bulanIndex = dateObj.getMonth();
         const hariNama = hariList[dateObj.getDay()];
 
-        // Tanggal cetak & TTD selalu akhir bulan berjalan
         const lastDayObj = new Date(tahun, bulanIndex + 1, 0);
         const lastDayNum = lastDayObj.getDate();
 
@@ -256,6 +293,7 @@
         btnElement.classList.add('active');
     }
 
+    // Login
     document.getElementById('loginForm').addEventListener('submit', function(e) {
         e.preventDefault();
         const nip = document.getElementById('loginNip').value.trim();
@@ -276,12 +314,15 @@
                     document.getElementById('valNama').innerText = data.nama;
                     document.getElementById('valNip').innerText = nip;
                     document.getElementById('valJabatan').innerText = data.jabatan;
-                    
                     document.getElementById('valNamaAbsen').innerText = data.nama;
                     document.getElementById('valNipAbsen').innerText = nip;
-
                     document.getElementById('ttdNama').innerText = data.nama;
                     document.getElementById('ttdNip').innerText = nip;
+
+                    // Otomatis isi tanggal hari ini pada form jurnal & absensi
+                    const todayStr = new Date().toISOString().split('T')[0];
+                    document.getElementById('tanggal').value = todayStr;
+                    document.getElementById('tglAbsen').value = todayStr;
 
                     updateTanggalTandatangan();
 
@@ -311,6 +352,115 @@
             });
     });
 
+    // Memilih Kelas 1 - 6 dan Memuat Daftar Siswa dari Google Sheets
+    function pilihKelas(kelas, btnElement) {
+        selectedKelas = kelas;
+        document.querySelectorAll('.kelas-btn').forEach(btn => btn.classList.remove('selected'));
+        btnElement.classList.add('selected');
+
+        const loadingSiswa = document.getElementById('loadingSiswa');
+        const containerDaftar = document.getElementById('containerDaftarSiswa');
+        const tbody = document.getElementById('tbodyInputAbsen');
+
+        loadingSiswa.style.display = "block";
+        containerDaftar.classList.add('hidden');
+
+        fetch(`${WEB_APP_URL}?action=getSiswaByKelas&kelas=${kelas}`)
+            .then(res => res.json())
+            .then(data => {
+                loadingSiswa.style.display = "none";
+                document.getElementById('judulKelasTerpilih').innerText = kelas;
+                tbody.innerHTML = "";
+
+                if (data.status === "success" && data.siswa.length > 0) {
+                    siswaKelasTerpilih = data.siswa;
+                    data.siswa.forEach((namaSiswa, index) => {
+                        tbody.innerHTML += `
+                            <tr>
+                                <td>${index + 1}</td>
+                                <td>${namaSiswa}</td>
+                                <td>
+                                    <select id="status_siswa_${index}" style="padding: 6px; font-size: 14px;">
+                                        <option value="Hadir" selected>Hadir</option>
+                                        <option value="Sakit">Sakit</option>
+                                        <option value="Izin">Izin</option>
+                                        <option value="Alfa">Alfa</option>
+                                    </select>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                    containerDaftar.classList.remove('hidden');
+                } else {
+                    tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: red;">Belum ada data nama siswa untuk Kelas ${kelas} di sheet DataSiswa.</td></tr>`;
+                    containerDaftar.classList.remove('hidden');
+                    siswaKelasTerpilih = [];
+                }
+            })
+            .catch(err => {
+                loadingSiswa.style.display = "none";
+                alert("Gagal mengambil data siswa dari Google Sheets.");
+            });
+    }
+
+    // Simpan Absensi Semua Siswa Sekaligus
+    function simpanAbsensiMassal() {
+        const tanggal = document.getElementById('tglAbsen').value;
+        if (!tanggal) {
+            alert("Silakan pilih Tanggal Absensi terlebih dahulu!");
+            return;
+        }
+        if (siswaKelasTerpilih.length === 0) {
+            alert("Tidak ada daftar siswa untuk disimpan.");
+            return;
+        }
+
+        let daftarKirim = [];
+        siswaKelasTerpilih.forEach((namaSiswa, index) => {
+            let status = document.getElementById(`status_siswa_${index}`).value;
+            daftarKirim.push({ namaSiswa: namaSiswa, keterangan: status });
+        });
+
+        const loading = document.getElementById('loadingAbsen');
+        loading.style.display = "block";
+
+        const payload = {
+            action: "simpanAbsensiMassal",
+            nip: currentUser.nip,
+            nama: currentUser.nama,
+            tanggal: tanggal,
+            kelas: selectedKelas,
+            daftarAbsensi: daftarKirim
+        };
+
+        fetch(WEB_APP_URL, {
+            method: "POST",
+            body: JSON.stringify(payload)
+        })
+        .then(res => res.json())
+        .then(data => {
+            loading.style.display = "none";
+            if (data.status === "success") {
+                daftarKirim.forEach(item => {
+                    listAbsensi.push({
+                        tanggal: tanggal,
+                        kelas: selectedKelas,
+                        namaSiswa: item.namaSiswa,
+                        keterangan: item.keterangan
+                    });
+                });
+                renderAbsensi();
+                alert(`Berhasil menyimpan absensi untuk seluruh siswa Kelas ${selectedKelas}!`);
+            } else {
+                alert("Gagal menyimpan absensi.");
+            }
+        })
+        .catch(err => {
+            loading.style.display = "none";
+            alert("Kesalahan jaringan saat menyimpan absensi.");
+        });
+    }
+
     function populateFilterBulan() {
         const selectBulan = document.getElementById('filterBulan');
         const currentVal = selectBulan.value;
@@ -327,9 +477,7 @@
                 selectBulan.appendChild(opt);
             }
         });
-        if (uniqueBulan.includes(currentVal)) {
-            selectBulan.value = currentVal;
-        }
+        if (uniqueBulan.includes(currentVal)) selectBulan.value = currentVal;
     }
 
     document.getElementById('jurnalForm').addEventListener('submit', function(e) {
@@ -351,17 +499,13 @@
             pekerjaan: pekerjaan
         };
 
-        fetch(WEB_APP_URL, {
-            method: "POST",
-            body: JSON.stringify(payload)
-        })
+        fetch(WEB_APP_URL, { method: "POST", body: JSON.stringify(payload) })
         .then(res => res.json())
         .then(data => {
             loading.style.display = "none";
             if (data.status === "success") {
                 let tglArr = tanggal.split("-");
                 let bulanTahunStr = namaBulanList[parseInt(tglArr[1]) - 1] + " " + tglArr[0];
-
                 listKegiatan.push({ kegiatan, pekerjaan, tanggal, bulanTahun: bulanTahunStr });
                 populateFilterBulan();
                 renderJurnal();
@@ -399,64 +543,30 @@
         });
     }
 
-    document.getElementById('absensiForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        const tanggal = document.getElementById('tglAbsen').value;
-        const namaSiswa = document.getElementById('namaSiswa').value;
-        const keterangan = document.getElementById('keteranganAbsen').value;
-
-        const loading = document.getElementById('loadingAbsen');
-        loading.style.display = "block";
-
-        const payload = {
-            action: "simpanAbsensi",
-            nip: currentUser.nip,
-            nama: currentUser.nama,
-            tanggal: tanggal,
-            namaSiswa: namaSiswa,
-            keterangan: keterangan
-        };
-
-        fetch(WEB_APP_URL, {
-            method: "POST",
-            body: JSON.stringify(payload)
-        })
-        .then(res => res.json())
-        .then(data => {
-            loading.style.display = "none";
-            if (data.status === "success") {
-                listAbsensi.push({ namaSiswa, keterangan, tanggal });
-                renderAbsensi();
-                alert("Absensi berhasil disimpan ke database!");
-                document.getElementById('namaSiswa').value = "";
-            } else {
-                alert("Gagal menyimpan absensi.");
-            }
-        })
-        .catch(err => {
-            loading.style.display = "none";
-            alert("Kesalahan jaringan.");
-        });
-    });
-
     function renderAbsensi() {
         const tbody = document.getElementById('tabelAbsensi');
+        const filterKelas = document.getElementById('filterKelasRekap').value;
         tbody.innerHTML = "";
-        if (listAbsensi.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #888;">Belum ada data absensi.</td></tr>`;
+
+        let filteredAbsen = listAbsensi;
+        if (filterKelas !== "semua") {
+            filteredAbsen = listAbsensi.filter(item => item.kelas && item.kelas.toString() === filterKelas);
+        }
+
+        if (filteredAbsen.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #888;">Belum ada data absensi untuk kelas ini.</td></tr>`;
             return;
         }
-        listAbsensi.forEach((item, idx) => {
+
+        filteredAbsen.forEach((item, idx) => {
             let bersihTanggal = formatTanggalClean(item.tanggal);
-            tbody.innerHTML += `<tr><td>${idx + 1}</td><td>${item.namaSiswa}</td><td><b>${item.keterangan}</b></td><td>${bersihTanggal}</td></tr>`;
+            tbody.innerHTML += `<tr><td>${idx + 1}</td><td>Kelas ${item.kelas || '-'}</td><td>${item.namaSiswa}</td><td><b>${item.keterangan}</b></td><td>${bersihTanggal}</td></tr>`;
         });
     }
 
-    // Fungsi unduh Jurnal ke format Word (.docx)
     function exportJurnalToWord() {
         let contentHTML = document.getElementById('exportJurnalContent').innerHTML;
         let htmlString = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Laporan Jurnal Kerja</title></head><body>${contentHTML}</body></html>`;
-        
         let converted = htmlDocx.asBlob(htmlString);
         let link = document.createElement('a');
         link.href = URL.createObjectURL(converted);
@@ -466,11 +576,9 @@
         document.body.removeChild(link);
     }
 
-    // Fungsi unduh Absensi ke format Word (.docx)
     function exportAbsensiToWord() {
         let contentHTML = document.getElementById('exportAbsensiContent').innerHTML;
         let htmlString = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Rekap Absensi Siswa</title></head><body>${contentHTML}</body></html>`;
-        
         let converted = htmlDocx.asBlob(htmlString);
         let link = document.createElement('a');
         link.href = URL.createObjectURL(converted);
@@ -480,29 +588,23 @@
         document.body.removeChild(link);
     }
 
-    // Fungsi unduh Jurnal ke PDF Aman (Tanpa Halaman Kosong & Tanpa Reload Logout)
     function exportJurnalToPdf() {
         const content = document.getElementById('exportJurnalContent');
         const printContainer = document.createElement('div');
         printContainer.className = 'print-container';
         printContainer.appendChild(content.cloneNode(true));
         document.body.appendChild(printContainer);
-        
         window.print();
-        
         document.body.removeChild(printContainer);
     }
 
-    // Fungsi unduh Absensi ke PDF Aman (Tanpa Halaman Kosong & Tanpa Reload Logout)
     function exportAbsensiToPdf() {
         const content = document.getElementById('exportAbsensiContent');
         const printContainer = document.createElement('div');
         printContainer.className = 'print-container';
         printContainer.appendChild(content.cloneNode(true));
         document.body.appendChild(printContainer);
-        
         window.print();
-        
         document.body.removeChild(printContainer);
     }
 
